@@ -1,0 +1,273 @@
+# Java Gradle Ci rcleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-java/ for more details
+#
+version: 2.1
+jobs:
+  build:
+     docker:
+       # specify the version you desire here
+       - image: circleci/openjdk:8-jdk
+
+     # Specify service dependencies here if necessary
+     # CircleCI maintains a library of pre-built images
+     # documented at https://circleci.com/docs/2.0/circleci-images/
+     # - image: circleci/postgres:9.4
+
+     working_directory: ~/repo
+
+     environment:
+       # Customize the JVM maximum heap limit
+       JVM_OPTS: -Xmx3200m
+       TERM: dumb
+
+     steps:
+       - checkout
+
+       # Download and cache dependencies
+       - restore_cache:
+           keys:
+             - v1-dependencies-{{ checksum "build.gradle" }}
+             # fallback to using the latest cache if no exact match is found
+             - v1-dependencies-
+
+       - run: gradle dependencies
+
+       - run: chmod +x ./gradlew
+       - run: ./gradlew build
+
+       - save_cache:
+           paths:
+             - ~/.gradle
+           key: v1-dependencies-{{ checksum "build.gradle" }}
+
+  sonarqube:
+    docker:
+      - image: circleci/openjdk:8-jdk
+
+    working_directory: ~/repo
+
+    environment:
+      JVM_OPTS: -Xmx3200m
+      TERM: dumb
+
+    steps:
+      - checkout
+
+      - run:
+          name: analyze by SonarQube
+          command: |
+            chmod +x ./gradlew
+            ./gradlew clean sonarqube \
+              -Dsonar.host.url=$SONAR_HOST_URL \
+              -Dsonar.jdbc.url=$SONAR_JDBC_URL \
+              -Dsonar.jdbc.driverClassName=$SONAR_JDBC_DRIVER \
+              -Dsonar.jdbc.username=$SONAR_JDBC_USERNAME \
+              -Dsonar.jdbc.password=$SONAR_JDBC_PASSWORD \
+              -Dsonar.projectName="${CIRCLE_BRANCH}"_"${CIRCLE_BUILD_NUM}"
+
+  nexus_snapshot:
+    docker:
+      - image: circleci/openjdk:8-jdk
+
+    working_directory: ~/repo
+
+    environment:
+      JVM_OPTS: -Xmx3200m
+      TERM: dumb
+
+    steps:
+      - checkout
+
+      - run:
+          name: upload to NEXUS
+          command: |
+            echo 'export NEXUS_URL=$NEXUS_URL_SNAPSHOT' >> $BASH_ENV
+            chmod +x ./gradlew
+            ./gradlew clean build upload
+
+      - run:
+          name: make release tags
+          command: |
+            NOW=$(date +'%Y_%m%d_%H%M%S')
+            git tag "issue/ver_2.0.0_${NOW}" origin/master
+            git tag
+            git push origin --tags
+
+  nexus_release:
+    docker:
+      - image: circleci/openjdk:8-jdk
+
+    working_directory: ~/repo
+
+    environment:
+      JVM_OPTS: -Xmx3200m
+      TERM: dumb
+
+    steps:
+      - checkout
+      - run:
+          name: upload to NEXUS
+          command: |
+            echo 'export NEXUS_URL=$NEXUS_URL_RELEASE' >> $BASH_ENV
+            chmod +x ./gradlew
+            ./gradlew clean build upload
+
+  deploy:
+     docker:
+       # specify the version you desire here
+       - image: circleci/openjdk:8-jdk
+
+       # Specify service dependencies here if necessary
+       # CircleCI maintains a library of pre-built images
+       # documented at https://circleci.com/docs/2.0/circleci-images/
+       # - image: circleci/postgres:9.4
+
+     working_directory: ~/repo
+
+     environment:
+       # Customize the JVM maximum heap limit
+       JVM_OPTS: -Xmx3200m
+       TERM: dumb
+
+     steps:
+       - checkout
+
+       # Download and cache dependencies
+       - restore_cache:
+           keys:
+             - v1-dependencies-{{ checksum "build.gradle" }}
+             # fallback to using the latest cache if no exact match is found
+             - v1-dependencies-
+
+       - run: chmod +x ./gradlew
+       - run: ./gradlew build
+
+       # check object
+       - run: ls -l ~/repo/build/libs/
+       
+       #upload app resource to ECS
+       - add_ssh_keys:
+           fingerprints:
+             - $FINGERPRINT
+             
+       - run:  
+           command: |  
+             ssh-keyscan -p 22 ${STAGING_SERVER_IP} >> ~/.ssh/known_hosts  
+
+       - run:
+           command: |
+             ssh -tt root@${STAGING_SERVER_IP} \<< EOF
+             cd ~
+             \cp -f ~/forResearech/$RESOURCE ~/forResearech/${RESOURCE}_BK_${CIRCLE_BUILD_NUM}
+             gzip ~/forResearech/${RESOURCE}_BK_${CIRCLE_BUILD_NUM}
+             exit
+             EOF
+
+       - run: scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=no ~/repo/build/libs/*.jar root@${STAGING_SERVER_IP}:~/forResearech/$RESOURCE
+
+       - run:
+           command: |
+             ssh -tt root@${STAGING_SERVER_IP} systemctl restart alibaba_research
+
+       - run:
+           name: make release tags
+           command: |
+             NOW=$(date +'%Y_%m%d_%H%M%S')
+             git tag "release/ver_2.0.0_${NOW}" origin/master
+             git tag
+             git push origin --tags
+
+workflows:
+  version: 2
+  workflow:
+    jobs:
+      - build:
+          filters:
+            branches:
+              only:
+                - /^issue\/.+/
+                - master
+                - release
+          post-steps:
+            - store_artifacts:
+                path: ~/repo/build/reports/
+      - sonarqube:
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - /^issue\/.+/
+                - master
+      - nexus_snapshot:
+          requires:
+            - build
+            - sonarqube
+          filters:
+            branches:
+              only:
+                - master
+      - nexus_release:
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - release
+      - deploy:
+          requires:
+            - build
+            - nexus_release
+          filters:
+            branches:
+              only: release
+#  nightly:
+#    triggers:
+#      - schedule:
+#          cron: "25 * * * *"
+#          filters:
+#            branches:
+#              only:
+#                - master
+#    jobs:
+#      - build:
+#          filters:
+#            branches:
+#              only:
+#                - /^issue\/.+/
+#                - master
+#                - release
+#          post-steps:
+#            - store_artifacts:
+#                path: ~/repo/build/reports/
+#      - sonarqube:
+#          requires:
+#            - build
+#          filters:
+#            branches:
+#              only:
+#                - /^issue\/.+/
+#                - master
+#      - nexus_snapshot:
+#          requires:
+#            - build
+#            - sonarqube
+#          filters:
+#            branches:
+#              only:
+#                - master
+#      - nexus_release:
+#          requires:
+#            - build
+#          filters:
+#            branches:
+#              only:
+#                - release
+#      - deploy:
+#          requires:
+#            - build
+#            - nexus_release
+#          filters:
+#            branches:
+#              only: release
