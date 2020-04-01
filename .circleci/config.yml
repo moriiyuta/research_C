@@ -96,14 +96,11 @@ jobs:
             ./gradlew clean build upload
 
       - run:
-          name: make release tags
+          name: make issue tags
           command: |
-            NOW=$(date +'%Y_%m%d_%H%M%S')
             export VESION=`./gradlew checkVersion | grep -E [0-9]+\.[0-9]+\.[0-9]+`
-            git tag "issue/ver_${VESION}_${NOW}" origin/master
-            git tag
-            git push origin --tags
-
+            git tag "ver_${VESION}" origin/master
+            git push origin "ver_${VESION}"
 
 ##"./gradlew upload"コマンドによるビルド成果物のNexus（RELEASE）登録を行う。
   nexus_release:
@@ -194,11 +191,9 @@ jobs:
        - run:
            name: make release tags
            command: |
-             NOW=$(date +'%Y_%m%d_%H%M%S')
              export VESION=`./gradlew checkVersion | grep -E [0-9]+\.[0-9]+\.[0-9]+`
-             git tag "release/ver_${VERSION}_${NOW}" origin/master
-             git tag
-             git push origin --tags
+             git tag "ver_${VERSION}" origin/master
+             git push origin "ver_${VERSION}"
 
 
 ##以下Workflow※各ステップの実行順と対象ブランチを規定
