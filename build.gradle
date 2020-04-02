@@ -10,12 +10,21 @@ buildscript {
     }
 }
 
+plugins {
+  id "com.github.spotbugs" version "3.0.0"
+  id "org.sonarqube" version "2.8"
+
+}
+
 group 'gr.di.uoa.pliakos.databasesystems'
 version '1.0.0-SNAPSHOT'
 
 apply plugin: 'java'
 apply plugin: 'idea'
 apply plugin: 'org.springframework.boot'
+apply plugin: 'checkstyle'
+apply plugin: 'jacoco'
+apply plugin: 'maven'
 
 bootJar {
     mainClassName = 'gr.di.uoa.pliakos.databasesystems.SpringBootPostgresExample'
@@ -31,4 +40,58 @@ dependencies {
     compile "org.springframework.boot:spring-boot-starter-thymeleaf:$springBootVersion"
     compile "org.springframework.boot:spring-boot-devtools:$springBootVersion"
     runtime 'org.postgresql:postgresql:42.1.1'
+    
+    spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.7.1'
+    testCompile 'junit:junit:4.+'
+}
+
+archivesBaseName = 'alibaba-research-circleCI'
+
+checkstyle {
+    toolVersion '6.7'
+    ignoreFailures true
+    checkstyleTest.enabled = false
+}
+tasks.withType(Checkstyle) {
+    reports {
+        xml.enabled = false
+        html.enabled = true
+    }
+}
+
+spotbugs {
+    toolVersion = '4.0.0'
+    ignoreFailures = true
+    effort = "max"
+    spotbugsTest.enabled = false
+}
+tasks.withType(com.github.spotbugs.SpotBugsTask) {
+    reports {
+        xml.enabled = false
+        html.enabled = true
+    }
+}
+
+sonarqube {
+    properties {
+        property "sonar.jacoco.reportPath", "${project.buildDir}/jacoco/test.exec"
+    }
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            repository(url: System.getenv('NEXUS_URL')){
+              authentication(userName: System.getenv('NEXUS_USERNAME'), password: System.getenv('NEXUS_USERPASSWORD'))
+            }
+        }
+    }
+}
+
+task checkVersion(type: GreetingTask)
+class GreetingTask extends DefaultTask {
+    @TaskAction
+    def greet() {
+        println project.version
+    }
 }
