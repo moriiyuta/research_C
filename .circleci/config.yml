@@ -2,12 +2,16 @@
 #
 # Check https://circleci.com/docs/2.0/language-java/ for more details
 #
+##CircleCIのバージョン指定
 version: 2.1
+
+##以下パイプラインの記述
 jobs:
+##"./gradlew build"コマンドによるビルド・静的検証・Junitテストを実施する
   build:
      docker:
        # specify the version you desire here
-       - image: circleci/openjdk:8-jdk
+       - image: circleci/openjdk:latest
 
      # Specify service dependencies here if necessary
      # CircleCI maintains a library of pre-built images
@@ -41,9 +45,11 @@ jobs:
              - ~/.gradle
            key: v1-dependencies-{{ checksum "build.gradle" }}
 
+
+##"./gradlew sonarqube"コマンドによるSonerQubeサイトで設定した検証の実施と結果連携を行う。
   sonarqube:
     docker:
-      - image: circleci/openjdk:8-jdk
+      - image: circleci/openjdk:latest
 
     working_directory: ~/repo
 
@@ -66,9 +72,12 @@ jobs:
               -Dsonar.jdbc.password=$SONAR_JDBC_PASSWORD \
               -Dsonar.projectName="${CIRCLE_BRANCH}"_"${CIRCLE_BUILD_NUM}"
 
+
+##"./gradlew upload"コマンドによるビルド成果物のNexus（SNAPSHOT）登録を行う。
+##issueブランチmerge後のmasterブランチに対してタグ付けを行う。
   nexus_snapshot:
     docker:
-      - image: circleci/openjdk:8-jdk
+      - image: circleci/openjdk:latest
 
     working_directory: ~/repo
 
@@ -87,16 +96,16 @@ jobs:
             ./gradlew clean build upload
 
       - run:
-          name: make release tags
+          name: make issue tags
           command: |
-            NOW=$(date +'%Y_%m%d_%H%M%S')
-            git tag "issue/ver_2.0.0_${NOW}" origin/master
-            git tag
-            git push origin --tags
+            export VESION=`./gradlew checkVersion | grep -E [0-9]+\.[0-9]+\.[0-9]+`
+            git tag "ver_${VESION}" origin/master
+            git push origin "ver_${VESION}"
 
+##"./gradlew upload"コマンドによるビルド成果物のNexus（RELEASE）登録を行う。
   nexus_release:
     docker:
-      - image: circleci/openjdk:8-jdk
+      - image: circleci/openjdk:latest
 
     working_directory: ~/repo
 
@@ -113,15 +122,14 @@ jobs:
             chmod +x ./gradlew
             ./gradlew clean build upload
 
+
+##連携先のECSにSCPで修正済みのjarファイルを配布する。
+##連携先のECSへのSSHでjarファイル起動Shellを置き換える。
+##"systemctl restart"コマンドでサービスを再起動する
+##最新のmasterブランチに対してタグ付けを行う。
   deploy:
      docker:
-       # specify the version you desire here
-       - image: circleci/openjdk:8-jdk
-
-       # Specify service dependencies here if necessary
-       # CircleCI maintains a library of pre-built images
-       # documented at https://circleci.com/docs/2.0/circleci-images/
-       # - image: circleci/postgres:9.4
+       - image: circleci/openjdk:latest
 
      working_directory: ~/repo
 
@@ -146,6 +154,7 @@ jobs:
        # check object
        - run: ls -l ~/repo/build/libs/
        
+       ##実運用では以下アプリケーション更新は、Terraformによるインフラ構築後に実施する。
        #upload app resource to ECS
        - add_ssh_keys:
            fingerprints:
@@ -156,28 +165,38 @@ jobs:
              ssh-keyscan -p 22 ${STAGING_SERVER_IP} >> ~/.ssh/known_hosts  
 
        - run:
+           name: release app
            command: |
-             ssh -tt root@${STAGING_SERVER_IP} \<< EOF
-             cd ~
-             \cp -f ~/forResearech/$RESOURCE ~/forResearech/${RESOURCE}_BK_${CIRCLE_BUILD_NUM}
-             gzip ~/forResearech/${RESOURCE}_BK_${CIRCLE_BUILD_NUM}
-             exit
-             EOF
-
-       - run: scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=no ~/repo/build/libs/*.jar root@${STAGING_SERVER_IP}:~/forResearech/$RESOURCE
+             scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=no ~/repo/build/libs/*.jar root@${STAGING_SERVER_IP}:~/RESOURCE/.
 
        - run:
+           name: update app shell
            command: |
-             ssh -tt root@${STAGING_SERVER_IP} systemctl restart alibaba_research
+             scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=no ./shell/${APP_SHELL}.sh root@${STAGING_SERVER_IP}:~/.
+
+       - run:
+           name: change permission app shell
+           command: |
+             ssh -tt root@${STAGING_SERVER_IP} \<< EOF
+               cd ~
+               chmod +x ${APP_SHELL}.sh
+               exit
+             EOF
+
+       - run:
+           name: restart alibaba app
+           command: |
+             ssh -tt root@${STAGING_SERVER_IP} systemctl restart ${APP_SHELL}
 
        - run:
            name: make release tags
            command: |
-             NOW=$(date +'%Y_%m%d_%H%M%S')
-             git tag "release/ver_2.0.0_${NOW}" origin/master
-             git tag
-             git push origin --tags
+             export VESION=`./gradlew checkVersion | grep -E [0-9]+\.[0-9]+\.[0-9]+`
+             git tag "ver_${VERSION}" origin/master
+             git push origin "ver_${VERSION}"
 
+
+##以下Workflow※各ステップの実行順と対象ブランチを規定
 workflows:
   version: 2
   workflow:

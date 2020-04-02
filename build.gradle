@@ -17,7 +17,7 @@ plugins {
 }
 
 group 'gr.di.uoa.pliakos.databasesystems'
-version '2.1.0-SNAPSHOT'
+version '2.3.0-SNAPSHOT'
 
 apply plugin: 'java'
 apply plugin: 'idea'
@@ -85,5 +85,13 @@ uploadArchives {
               authentication(userName: System.getenv('NEXUS_USERNAME'), password: System.getenv('NEXUS_USERPASSWORD'))
             }
         }
+    }
+}
+
+task checkVersion(type: GreetingTask)
+class GreetingTask extends DefaultTask {
+    @TaskAction
+    def greet() {
+        println project.version
     }
 }
