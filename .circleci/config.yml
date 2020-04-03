@@ -120,7 +120,7 @@ jobs:
           command: |
             echo 'export NEXUS_URL=$NEXUS_URL_RELEASE' >> $BASH_ENV
             chmod +x ./gradlew
-            ./gradlew clean build upload
+            ./gradlew clean build publish
 
 
 ##連携先のECSにSCPで修正済みのjarファイルを配布する。
