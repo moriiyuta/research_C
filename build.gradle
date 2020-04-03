@@ -4,7 +4,7 @@ plugins {
   id "org.springframework.boot" version "2.1.4.RELEASE"
   id "org.sonarqube" version "2.8"
   id "jacoco"
-  id "maven"
+  id "maven-publish"
 }
 
 group 'gr.di.uoa.pliakos.databasesystems'
@@ -34,11 +34,22 @@ sonarqube {
     }
 }
 
-uploadArchives {
+//基本構成は下記を参照
+//https://docs.gradle.org/current/userguide/publishing_maven.html#publishing_maven:complete_example
+//http://mike-neck.github.io/blog/2013/06/19/publish-maven-artifact-with-sign-files-1/
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = "alibaba-research-circleCI" //デフォルトだとルートディレクトリ名（CircleCIだと"repo"）になる
+            from components.java
+        }
+    }
     repositories {
-        mavenDeployer {
-            repository(url: System.getenv('NEXUS_URL')){
-              authentication(userName: System.getenv('NEXUS_USERNAME'), password: System.getenv('NEXUS_USERPASSWORD'))
+        maven {
+            url System.getenv("NEXUS_URL")
+            credentials {
+                username = System.getenv("NEXUS_USERNAME") 
+                password = System.getenv("NEXUS_USERPASSWORD") 
             }
         }
     }
