@@ -1,0 +1,2 @@
+#!/bin/bash
+java -jar /root/RESOURCE/alibaba-research-circleCI-2.1.0-RELEASE.jar
