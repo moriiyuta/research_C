@@ -1,34 +1,70 @@
-buildscript {
-    ext {
-        springBootVersion = '2.1.4.RELEASE'
-    }
-    repositories {
-        mavenCentral()
-    }
-    dependencies {
-        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+buildscript { 
+    ext { 
+        springBootVersion = "2.1.4.RELEASE" 
     }
 }
 
-group 'gr.di.uoa.pliakos.databasesystems'
-version '1.0.0-SNAPSHOT'
+plugins {
+  id "java"
+  id "idea"
+  id "org.springframework.boot" version "${springBootVersion}"
+  id "org.sonarqube" version "2.8"
+  id "jacoco"
+  id "maven-publish"
+}
 
-apply plugin: 'java'
-apply plugin: 'idea'
-apply plugin: 'org.springframework.boot'
+group "gr.di.uoa.pliakos.databasesystems"
+version "1.0.0-SNAPSHOT"
+archivesBaseName = "alibaba-research-circleCI"
 
 bootJar {
-    mainClassName = 'gr.di.uoa.pliakos.databasesystems.SpringBootPostgresExample'
+    mainClassName = "gr.di.uoa.pliakos.databasesystems.SpringBootPostgresExample"
 }
 
 repositories {
     mavenCentral()
 }
-
 dependencies {
     compile "org.springframework.boot:spring-boot-starter-data-jpa:$springBootVersion"
     compile "org.springframework.boot:spring-boot-starter-web:$springBootVersion"
     compile "org.springframework.boot:spring-boot-starter-thymeleaf:$springBootVersion"
     compile "org.springframework.boot:spring-boot-devtools:$springBootVersion"
-    runtime 'org.postgresql:postgresql:42.1.1'
+    runtime "org.postgresql:postgresql:42.1.1"
+    testCompile "junit:junit:4.+"
+}
+
+sonarqube {
+    properties {
+        property "sonar.jacoco.reportPath", "${project.buildDir}/jacoco/test.exec"
+    }
+}
+
+//基本構成は下記を参照
+//https://docs.gradle.org/current/userguide/publishing_maven.html#publishing_maven:complete_example
+//http://mike-neck.github.io/blog/2013/06/19/publish-maven-artifact-with-sign-files-1/
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = group
+            artifactId = archivesBaseName
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url System.getenv("NEXUS_URL")
+            credentials {
+                username = System.getenv("NEXUS_USERNAME") 
+                password = System.getenv("NEXUS_USERPASSWORD") 
+            }
+        }
+    }
+}
+
+task checkVersion(type: CheckVersionTask)
+class CheckVersionTask extends DefaultTask {
+    @TaskAction
+    def version() {
+        println project.version
+    }
 }

@@ -35,9 +35,9 @@ jobs:
              # fallback to using the latest cache if no exact match is found
              - v1-dependencies-
 
-       - run: gradle dependencies
 
        - run: chmod +x ./gradlew
+       - run: ./gradlew dependencies
        - run: ./gradlew build
 
        - save_cache:
@@ -93,14 +93,14 @@ jobs:
           command: |
             echo 'export NEXUS_URL=$NEXUS_URL_SNAPSHOT' >> $BASH_ENV
             chmod +x ./gradlew
-            ./gradlew clean build upload
+            ./gradlew clean build publish
 
       - run:
           name: make issue tags
           command: |
-            export VESION=`./gradlew checkVersion | grep -E [0-9]+\.[0-9]+\.[0-9]+`
-            git tag "ver_${VESION}" origin/master
-            git push origin "ver_${VESION}"
+            export VERSION=`./gradlew checkVersion | grep -E [0-9]+\.[0-9]+\.[0-9]+`
+            git tag "ver_${VERSION}" origin/master
+            git push origin "ver_${VERSION}"
 
 ##"./gradlew upload"コマンドによるビルド成果物のNexus（RELEASE）登録を行う。
   nexus_release:
@@ -120,7 +120,7 @@ jobs:
           command: |
             echo 'export NEXUS_URL=$NEXUS_URL_RELEASE' >> $BASH_ENV
             chmod +x ./gradlew
-            ./gradlew clean build upload
+            ./gradlew clean build publish
 
 
 ##連携先のECSにSCPで修正済みのjarファイルを配布する。
@@ -191,7 +191,7 @@ jobs:
        - run:
            name: make release tags
            command: |
-             export VESION=`./gradlew checkVersion | grep -E [0-9]+\.[0-9]+\.[0-9]+`
+             export VERSION=`./gradlew checkVersion | grep -E [0-9]+\.[0-9]+\.[0-9]+`
              git tag "ver_${VERSION}" origin/master
              git push origin "ver_${VERSION}"
 
@@ -205,7 +205,7 @@ workflows:
           filters:
             branches:
               only:
-                - /^issue\/.+/
+                - /^issue.+/
                 - master
                 - release
           post-steps:
@@ -217,7 +217,7 @@ workflows:
           filters:
             branches:
               only:
-                - /^issue\/.+/
+                - /^issue.+/
                 - master
       - nexus_snapshot:
           requires:
@@ -254,7 +254,7 @@ workflows:
 #          filters:
 #            branches:
 #              only:
-#                - /^issue\/.+/
+#                - /^issue.+/
 #                - master
 #                - release
 #          post-steps:
@@ -266,7 +266,7 @@ workflows:
 #          filters:
 #            branches:
 #              only:
-#                - /^issue\/.+/
+#                - /^issue.+/
 #                - master
 #      - nexus_snapshot:
 #          requires:
