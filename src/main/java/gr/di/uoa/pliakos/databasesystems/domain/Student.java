@@ -23,7 +23,7 @@ public class Student {
     int rollNo;
     String name;
     Date dateOfBirth;
-    int test;
+    int testTwo;
 
     @OneToMany(fetch = FetchType.EAGER, cascade = CascadeType.ALL, mappedBy = "student")
     private Set<Course> courses;
